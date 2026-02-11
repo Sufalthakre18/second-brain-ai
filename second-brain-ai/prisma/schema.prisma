@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum KnowledgeType {
+  note
+  link
+  insight
+}
+
+model KnowledgeItem {
+  id        String        @id @default(cuid())
+  title     String
+  content   String        @db.Text
+  type      KnowledgeType
+  tags      String[]      @default([])
+  summary   String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([createdAt])
+  @@index([type])
+}
