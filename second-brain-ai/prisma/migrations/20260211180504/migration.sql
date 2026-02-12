@@ -9,6 +9,7 @@ CREATE TABLE "KnowledgeItem" (
     "type" "KnowledgeType" NOT NULL,
     "tags" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "summary" TEXT,
+    "embedding" DOUBLE PRECISION[] DEFAULT ARRAY[]::DOUBLE PRECISION[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
