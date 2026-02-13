@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateSummary, generateTags } from "@/lib/ai";
+import { generateSummary, generateTags,generateEmbedding } from "@/lib/ai";
 import { z } from "zod";
 
 const schema = z.object({
@@ -66,6 +66,7 @@ export async function GET(req: Request) {
 }
 
 
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -73,6 +74,9 @@ export async function POST(req: Request) {
 
     const summary = await generateSummary(parsed.content);
     const tags = await generateTags(parsed.content);
+    const embedding = await generateEmbedding(parsed.content);
+
+    console.log("Saving embedding length:", embedding.length);
 
     const item = await prisma.knowledgeItem.create({
       data: {
@@ -81,6 +85,7 @@ export async function POST(req: Request) {
         type: parsed.type,
         summary,
         tags,
+        embedding, // 🔥 THIS WAS MISSING
       },
     });
 

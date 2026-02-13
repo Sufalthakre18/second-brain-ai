@@ -30,6 +30,7 @@ export async function POST(req: Request) {
 
     // ✅ Generate embedding for question
     const questionEmbedding = await generateEmbedding(parsed.question);
+console.log("Question embedding length:", questionEmbedding.length);
 
     // ✅ Fetch all stored knowledge embeddings
     const allItems = await prisma.knowledgeItem.findMany({
@@ -40,6 +41,8 @@ export async function POST(req: Request) {
         embedding: true,
       },
     });
+    console.log("First item embedding length:", allItems[0]?.embedding?.length);
+
 
     if (!allItems.length) {
       return NextResponse.json({
