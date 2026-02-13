@@ -1,17 +1,74 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { answerQuestion, generateEmbedding } from "@/lib/ai";
+import { generateSummary, generateTags, generateEmbedding } from "@/lib/ai";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { cosineSimilarity } from "@/lib/vector";
 import { z } from "zod";
 
 const schema = z.object({
-  question: z.string().min(5),
+  title: z.string().min(3),
+  content: z.string().min(10),
+  type: z.enum(["note", "link", "insight"]),
 });
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+
+    const search = searchParams.get("search") || "";
+    const type = searchParams.get("type");
+    const tag = searchParams.get("tag");
+    const sort = searchParams.get("sort") || "desc";
+    const page = Number(searchParams.get("page") || 1);
+    const limit = Number(searchParams.get("limit") || 10);
+
+    const skip = (page - 1) * limit;
+
+    const items = await prisma.knowledgeItem.findMany({
+      where: {
+        AND: [
+          search
+            ? {
+                OR: [
+                  { title: { contains: search, mode: "insensitive" } },
+                  { content: { contains: search, mode: "insensitive" } },
+                ],
+              }
+            : {},
+          type ? { type: type as any } : {},
+          tag ? { tags: { has: tag.toLowerCase() } } : {},
+        ],
+      },
+      orderBy: {
+        createdAt: sort === "asc" ? "asc" : "desc",
+      },
+      skip,
+      take: limit,
+    });
+
+    const total = await prisma.knowledgeItem.count();
+
+    return NextResponse.json({
+      success: true,
+      data: items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Failed to fetch items:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to fetch items" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    // ✅ Rate Limit
+    // ✅ Rate Limiting
     const ip =
       req.headers.get("x-forwarded-for") ||
       req.headers.get("x-real-ip") ||
@@ -24,69 +81,38 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ Validate input
     const body = await req.json();
     const parsed = schema.parse(body);
 
-    // ✅ Generate embedding for question
-    const questionEmbedding = await generateEmbedding(parsed.question);
-console.log("Question embedding length:", questionEmbedding.length);
+    // Generate AI content
+    const summary = await generateSummary(parsed.content);
+    const tags = await generateTags(parsed.content);
+    const embedding = await generateEmbedding(parsed.content);
 
-    // ✅ Fetch all stored knowledge embeddings
-    const allItems = await prisma.knowledgeItem.findMany({
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        embedding: true,
+    const item = await prisma.knowledgeItem.create({
+      data: {
+        title: parsed.title,
+        content: parsed.content,
+        type: parsed.type,
+        summary,
+        tags,
+        embedding,
       },
     });
-    console.log("First item embedding length:", allItems[0]?.embedding?.length);
-
-
-    if (!allItems.length) {
-      return NextResponse.json({
-        success: true,
-        answer: "No knowledge items found in the system.",
-        sources: [],
-      });
-    }
-
-    // ✅ Score items using cosine similarity
-    const scoredItems = allItems
-      .map((item) => ({
-        ...item,
-        score: cosineSimilarity(questionEmbedding, item.embedding),
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5); // top 5 most relevant
-
-    // ✅ Prepare context for AI
-    const contextForAI = scoredItems.map((item) => ({
-      id: item.id,
-      title: item.title,
-      content: item.content,
-    }));
-
-    // ✅ Generate final AI answer
-    const answer = await answerQuestion(parsed.question, contextForAI);
-
-    return NextResponse.json({
-      success: true,
-      answer,
-      sources: scoredItems.map((i) => ({
-        id: i.id,
-        title: i.title,
-        similarityScore: i.score,
-      })),
-    });
-  } catch (error) {
-    console.error("Query failed:", error);
 
     return NextResponse.json(
       {
+        success: true,
+        data: item,
+      },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    console.error("Failed to create item:", error);
+    return NextResponse.json(
+      {
         success: false,
-        error: "Query failed",
+        error: error.message || "Failed to create item",
       },
       { status: 400 }
     );
