@@ -10,6 +10,19 @@ const schema = z.object({
   type: z.enum(["note", "link", "insight"]),
 });
 
+// Type for items returned from Prisma
+type KnowledgeItemType = {
+  id: string;
+  title: string;
+  content: string;
+  type: "note" | "link" | "insight";
+  tags: string[];
+  summary: string | null;
+  embedding: number[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -20,10 +33,10 @@ export async function GET(req: Request) {
     const sort = searchParams.get("sort") || "desc";
     const page = Number(searchParams.get("page") || 1);
     const limit = Number(searchParams.get("limit") || 10);
-
     const skip = (page - 1) * limit;
 
-    const items = await prisma.knowledgeItem.findMany({
+    // ✅ Explicitly type Prisma response
+    const items: KnowledgeItemType[] = await prisma.knowledgeItem.findMany({
       where: {
         AND: [
           search
@@ -84,12 +97,13 @@ export async function POST(req: Request) {
     const body = await req.json();
     const parsed = schema.parse(body);
 
-    // Generate AI content
-    const summary = await generateSummary(parsed.content);
-    const tags = await generateTags(parsed.content);
-    const embedding = await generateEmbedding(parsed.content);
+    // ✅ Generate AI metadata
+    const summary: string = await generateSummary(parsed.content);
+    const tags: string[] = await generateTags(parsed.content);
+    const embedding: number[] = await generateEmbedding(parsed.content);
 
-    const item = await prisma.knowledgeItem.create({
+    // ✅ Create knowledge item
+    const item: KnowledgeItemType = await prisma.knowledgeItem.create({
       data: {
         title: parsed.title,
         content: parsed.content,
