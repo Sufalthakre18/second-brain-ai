@@ -51,13 +51,10 @@ export async function POST(req: Request) {
 
     // ✅ Score items using cosine similarity - FIXED TYPE
     const scoredItems = allItems
-      .map((item: { id: string; title: string; content: string; embedding: number[] }) => ({
+      .map((item: { id: string; title: string; content: string; embedding: number[] }) => ({  // ✅ LINE 32 - WITH TYPE
         ...item,
         score: cosineSimilarity(questionEmbedding, item.embedding),
       }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5); // top 5 most relevant
-
     // ✅ Prepare context for AI
     const contextForAI = scoredItems.map((item) => ({
       id: item.id,
